@@ -1,0 +1,133 @@
+# API REST de Sonido Vivo
+
+Backend de la tienda de instrumentos musicales **Sonido Vivo**, desarrollado con **Spring Boot**, **Spring Data JPA**,
+**Spring Security + JWT** y **MySQL**. Documentación interactiva con **Swagger**.
+
+---
+
+## 🛠️ Tecnologías Utilizadas
+
+- **Java 21**
+- **Spring Boot 4**
+- **Spring Data JPA** + **MySQL Server**
+- **Spring Security** con **JWT** (jjwt)
+- **Bean Validation** (`@Valid`)
+- **Swagger / OpenAPI** (springdoc)
+- **Lombok**
+- **Maven**
+
+---
+
+## 📋 Requisitos Previos
+
+1. **JDK 21** configurado en las variables de entorno.
+2. **MySQL Server** en ejecución.
+3. **Maven** (opcional si usas el wrapper incluido `./mvnw`).
+
+---
+
+## 🗄️ Base de Datos
+
+Crea la base de datos antes de iniciar la aplicación:
+
+```sql
+CREATE DATABASE bd_sonidovivo;
+```
+
+Las tablas (`usuarios`, `categorias`, `productos`, `compras`, `detalles_compra`) las crea Hibernate automáticamente
+(`ddl-auto=update`).
+
+---
+
+## ⚙️ Configuración (`application.properties`)
+
+Ajusta las credenciales de tu MySQL local en `src/main/resources/application.properties`:
+
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/bd_sonidovivo
+spring.datasource.username=root
+spring.datasource.password=tu_contraseña
+```
+
+El token JWT se firma con `jwt.secret` (mínimo 32 caracteres) y dura `jwt.expiration-ms` (por defecto 2 horas).
+
+---
+
+## 🚀 Ejecución del Proyecto
+
+```bash
+./mvnw spring-boot:run
+```
+
+*(En Windows: `mvnw.cmd spring-boot:run`, o ejecutar `SonidoVivoApplication` desde el IDE).*
+
+- API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+En Swagger, ejecuta `POST /auth/login`, copia el `token` de la respuesta y pégalo en el botón **Authorize** para
+probar los endpoints protegidos.
+
+---
+
+## 📦 Carga Inicial de Datos
+
+Al iniciar con la base vacía, un `CommandLineRunner` (`DataInitializer`) inserta categorías, productos y estos usuarios
+(las contraseñas se guardan encriptadas con BCrypt):
+
+| Rol | Correo | Contraseña |
+|---|---|---|
+| administrador | `admin@duocuc.cl` | `Admin123` |
+| vendedor | `vendedor@duocuc.cl` | `Vendedor123` |
+| cliente | `cliente@duocuc.cl` | `Cliente123` |
+
+---
+
+## 📡 Endpoints de la API
+
+| Método | Endpoint | Descripción | Acceso |
+| :--- | :--- | :--- | :--- |
+| POST | `/auth/login` | Inicia sesión y entrega el token JWT | Público |
+| POST | `/auth/registro` | Registra una cuenta de cliente | Público |
+| POST | `/auth/renovar` | Entrega un token nuevo a partir de uno válido | Usuario con sesión |
+| GET | `/productos`, `/productos/{id}` | Consulta el catálogo | Público |
+| GET | `/categorias` | Lista las categorías | Público |
+| POST / PUT / DELETE | `/productos`, `/productos/{id}` | Gestión de productos | Administrador |
+| PATCH | `/productos/{id}/stock` | Modifica solo el stock | Administrador, Vendedor |
+| POST / PUT / DELETE | `/categorias`, `/categorias/{id}` | Gestión de categorías | Administrador |
+| GET | `/usuarios`, `/usuarios/{id}` | Consulta usuarios | Administrador |
+| POST | `/usuarios` | Crea un usuario (el vendedor solo clientes) | Administrador, Vendedor |
+| PUT / DELETE | `/usuarios/{id}` | Edita o elimina un usuario | Administrador |
+| PUT | `/usuarios/perfil` | Edita el perfil propio | Usuario con sesión |
+| POST | `/compras` | Registra una compra con el carrito | Usuario con sesión |
+| GET | `/compras/mis-compras` | Historial del usuario | Usuario con sesión |
+| GET | `/compras` | Historial de todas las compras | Administrador |
+
+Las rutas protegidas requieren la cabecera `Authorization: Bearer <token>`. Sin token responden `401`; con un rol
+insuficiente, `403`. Los errores siempre tienen el formato `{ "mensaje": "..." }`.
+
+### Ejemplos de peticiones JSON
+
+**POST /auth/login**
+```json
+{ "email": "admin@duocuc.cl", "password": "Admin123" }
+```
+
+**POST /compras** (los precios los calcula el servidor)
+```json
+{ "items": [ { "productoId": 1, "cantidad": 2 }, { "productoId": 4, "cantidad": 1 } ] }
+```
+
+---
+
+## ✅ Validaciones y reglas de negocio
+
+- Correo institucional `@duocuc.cl`, único; contraseña de mínimo 6 caracteres con una mayúscula.
+- Edad entre 14 y 120 años; la fecha de nacimiento no puede ser futura.
+- 3 contraseñas incorrectas seguidas **bloquean la cuenta**; el administrador la puede desbloquear.
+- El registro público siempre crea clientes; el vendedor solo puede crear clientes.
+- El administrador no puede cambiar su propio rol, bloquearse ni eliminarse.
+- No se elimina un usuario que tiene compras registradas.
+- Productos: precio entre $1 y $1.000.000, precio de oferta menor al precio normal, stock mayor o igual a 0.
+- Categorías: nombre único de al menos 3 caracteres; no se elimina una categoría con productos.
+- Compras: se valida el stock disponible, el precio lo toma el servidor (oferta si existe), el stock se descuenta y la
+  compra se guarda en una sola transacción. El historial conserva el nombre y el precio al momento de comprar.
