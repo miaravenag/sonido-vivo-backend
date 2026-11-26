@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Secretos (nunca subir a GitHub) ###
+secrets.properties
+.env

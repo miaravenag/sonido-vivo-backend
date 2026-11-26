@@ -7,6 +7,7 @@ import cl.duoc.sonidovivo.exception.RecursoNoEncontradoException;
 import cl.duoc.sonidovivo.exception.ReglaNegocioException;
 import cl.duoc.sonidovivo.model.Compra;
 import cl.duoc.sonidovivo.model.DetalleCompra;
+import cl.duoc.sonidovivo.model.EstadoCompra;
 import cl.duoc.sonidovivo.model.Producto;
 import cl.duoc.sonidovivo.model.Usuario;
 import cl.duoc.sonidovivo.repository.CompraRepository;
@@ -94,5 +95,30 @@ public class CompraService {
     public List<CompraResponse> listarTodas() {
         return compraRepository.findAllByOrderByFechaDesc().stream()
                 .map(CompraResponse::desde).toList();
+    }
+
+    // Administrador: avanza o cancela una compra. Al cancelar se devuelve el stock.
+    @Transactional
+    public CompraResponse cambiarEstado(Long compraId, EstadoCompra nuevo) {
+        Compra compra = compraRepository.findById(compraId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("La compra no existe."));
+        EstadoCompra actual = compra.getEstado();
+
+        if (!actual.puedePasarA(nuevo)) {
+            throw new ReglaNegocioException(HttpStatus.CONFLICT,
+                    "No se puede cambiar una compra de " + actual + " a " + nuevo + ".");
+        }
+
+        if (nuevo == EstadoCompra.CANCELADA) {
+            for (DetalleCompra detalle : compra.getDetalles()) {
+                int cantidad = detalle.getCantidad();
+                // Si el producto fue eliminado después de la compra, no hay stock que devolver
+                productoRepository.findById(detalle.getProductoId())
+                        .ifPresent(producto -> producto.setStock(producto.getStock() + cantidad));
+            }
+        }
+
+        compra.setEstado(nuevo);
+        return CompraResponse.desde(compra);
     }
 }

@@ -20,21 +20,43 @@ public class JwtService {
     @Value("${jwt.expiration-ms}")
     private long expiracionMs;
 
+    // Duración máxima de una sesión, aunque el token se renueve varias veces
+    @Value("${jwt.max-session-ms}")
+    private long maxSesionMs;
+
     private SecretKey clave() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     // El "subject" del token es el id del usuario (así sigue siendo válido si cambia su correo)
     public String generarToken(Usuario usuario) {
+        return generarToken(usuario, System.currentTimeMillis());
+    }
+
+    // "inicio" guarda cuándo comenzó la sesión (login); al renovar se conserva ese valor
+    public String generarToken(Usuario usuario, long inicioSesionMs) {
         Date ahora = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(usuario.getId()))
                 .claim("email", usuario.getEmail())
                 .claim("rol", usuario.getRol())
+                .claim("inicio", inicioSesionMs)
                 .issuedAt(ahora)
                 .expiration(new Date(ahora.getTime() + expiracionMs))
                 .signWith(clave())
                 .compact();
+    }
+
+    public long inicioSesion(Claims claims) {
+        Object inicio = claims.get("inicio");
+        if (inicio instanceof Number numero) {
+            return numero.longValue();
+        }
+        return claims.getIssuedAt().getTime(); // tokens antiguos sin el claim
+    }
+
+    public long getMaxSesionMs() {
+        return maxSesionMs;
     }
 
     // Lanza JwtException si el token es inválido, fue alterado o expiró

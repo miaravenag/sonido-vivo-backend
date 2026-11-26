@@ -39,17 +39,26 @@ Las tablas (`usuarios`, `categorias`, `productos`, `compras`, `detalles_compra`)
 
 ---
 
-## ⚙️ Configuración (`application.properties`)
+## ⚙️ Configuración y secretos
 
-Ajusta las credenciales de tu MySQL local en `src/main/resources/application.properties`:
+Las contraseñas y la clave JWT **no están en el repositorio**. Antes de ejecutar:
+
+1. Copia `secrets.properties.example` como `secrets.properties` (en la raíz, junto al `pom.xml`).
+2. Completa tus valores:
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/bd_sonidovivo
-spring.datasource.username=root
-spring.datasource.password=tu_contraseña
+DB_PASSWORD=la_contraseña_de_tu_mysql
+JWT_SECRET=una-clave-larga-y-aleatoria-de-al-menos-32-caracteres
 ```
 
-El token JWT se firma con `jwt.secret` (mínimo 32 caracteres) y dura `jwt.expiration-ms` (por defecto 2 horas).
+`secrets.properties` está en `.gitignore`. También puedes usar variables de entorno con los mismos nombres
+(`DB_PASSWORD`, `JWT_SECRET`) y, opcionalmente, `DB_URL`, `DB_USER`, `CORS_ORIGINS`.
+
+Sin `JWT_SECRET` la aplicación no arranca (a propósito).
+
+- El token JWT dura `jwt.expiration-ms` (por defecto 2 horas).
+- Aunque el token se renueve, la sesión dura como máximo `jwt.max-session-ms` (por defecto 8 horas); después hay que
+  volver a iniciar sesión.
 
 ---
 
@@ -80,6 +89,9 @@ Al iniciar con la base vacía, un `CommandLineRunner` (`DataInitializer`) insert
 | vendedor | `vendedor@duocuc.cl` | `Vendedor123` |
 | cliente | `cliente@duocuc.cl` | `Cliente123` |
 
+Si no existe ninguna compra, también se crean **21 compras de ejemplo** del cliente repartidas en el último año
+(con distintos estados) para que el dashboard tenga datos en la demostración. No modifican el stock.
+
 ---
 
 ## 📡 Endpoints de la API
@@ -101,6 +113,8 @@ Al iniciar con la base vacía, un `CommandLineRunner` (`DataInitializer`) insert
 | POST | `/compras` | Registra una compra con el carrito | Usuario con sesión |
 | GET | `/compras/mis-compras` | Historial del usuario | Usuario con sesión |
 | GET | `/compras` | Historial de todas las compras | Administrador |
+| PATCH | `/compras/{id}/estado` | Cambia el estado de una compra | Administrador |
+| GET | `/reportes/resumen?periodo=semana\|mes\|anio\|todo` | Indicadores del dashboard | Administrador |
 
 Las rutas protegidas requieren la cabecera `Authorization: Bearer <token>`. Sin token responden `401`; con un rol
 insuficiente, `403`. Los errores siempre tienen el formato `{ "mensaje": "..." }`.
@@ -117,6 +131,11 @@ insuficiente, `403`. Los errores siempre tienen el formato `{ "mensaje": "..." }
 { "items": [ { "productoId": 1, "cantidad": 2 }, { "productoId": 4, "cantidad": 1 } ] }
 ```
 
+**PATCH /compras/{id}/estado**
+```json
+{ "estado": "EN_PREPARACION" }
+```
+
 ---
 
 ## ✅ Validaciones y reglas de negocio
@@ -131,3 +150,9 @@ insuficiente, `403`. Los errores siempre tienen el formato `{ "mensaje": "..." }
 - Categorías: nombre único de al menos 3 caracteres; no se elimina una categoría con productos.
 - Compras: se valida el stock disponible, el precio lo toma el servidor (oferta si existe), el stock se descuenta y la
   compra se guarda en una sola transacción. El historial conserva el nombre y el precio al momento de comprar.
+- Estado de la compra: `PENDIENTE` → `EN_PREPARACION` → `ENVIADA` → `ENTREGADA`. Se puede pasar a `CANCELADA` desde
+  `PENDIENTE` o `EN_PREPARACION` (se devuelve el stock). `ENTREGADA` y `CANCELADA` son estados finales; una transición
+  no permitida responde `409`.
+- Reportes: las compras canceladas no cuentan como venta. Periodos: `semana` (7 días), `mes` (30 días), `anio`
+  (12 meses) y `todo`.
+- Sesión: el login pone `401` con el mismo mensaje si el correo no existe o la contraseña es incorrecta.

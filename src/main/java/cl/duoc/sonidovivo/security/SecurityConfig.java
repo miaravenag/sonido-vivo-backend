@@ -1,6 +1,7 @@
 package cl.duoc.sonidovivo.security;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,11 +17,15 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
 @EnableMethodSecurity // habilita @PreAuthorize en los controladores
 public class SecurityConfig {
+
+    @Value("${app.cors.allowed-origins}")
+    private String origenesPermitidos;
 
     @Autowired
     private JwtAuthFilter jwtAuthFilter;
@@ -63,7 +68,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuracion = new CorsConfiguration();
-        configuracion.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuracion.setAllowedOrigins(Arrays.stream(origenesPermitidos.split(",")).map(String::trim).toList());
         configuracion.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuracion.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 

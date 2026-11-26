@@ -30,6 +30,11 @@ public class Compra {
     @Column(nullable = false)
     private long total;
 
+    // columnDefinition con DEFAULT permite que ddl-auto=update agregue la columna aunque ya existan compras
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20) default 'PENDIENTE'")
+    private EstadoCompra estado = EstadoCompra.PENDIENTE;
+
     @OneToMany(mappedBy = "compra", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DetalleCompra> detalles = new ArrayList<>();
 

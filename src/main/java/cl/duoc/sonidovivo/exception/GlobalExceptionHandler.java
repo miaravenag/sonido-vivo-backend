@@ -1,5 +1,7 @@
 package cl.duoc.sonidovivo.exception;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -32,5 +34,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> jsonInvalido(HttpMessageNotReadableException ex) {
         return ResponseEntity.badRequest().body(Map.of("mensaje", "El cuerpo de la solicitud no es válido."));
+    }
+
+    // Choque con una restricción de la base de datos (dato duplicado, registro en uso...)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> integridad(DataIntegrityViolationException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("mensaje", "No se pudo guardar: los datos entran en conflicto con registros existentes."));
     }
 }

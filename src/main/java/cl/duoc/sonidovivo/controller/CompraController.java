@@ -2,6 +2,7 @@ package cl.duoc.sonidovivo.controller;
 
 import cl.duoc.sonidovivo.dto.CompraRequest;
 import cl.duoc.sonidovivo.dto.CompraResponse;
+import cl.duoc.sonidovivo.dto.EstadoCompraRequest;
 import cl.duoc.sonidovivo.service.CompraService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,5 +42,13 @@ public class CompraController {
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<List<CompraResponse>> listarTodas() {
         return ResponseEntity.ok(compraService.listarTodas());
+    }
+
+    @Operation(summary = "Actualizar el estado de una compra (administrador)")
+    @PatchMapping("/{id}/estado")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<CompraResponse> cambiarEstado(@PathVariable Long id,
+                                                        @Valid @RequestBody EstadoCompraRequest request) {
+        return ResponseEntity.ok(compraService.cambiarEstado(id, request.estado()));
     }
 }

@@ -31,7 +31,7 @@ public class AuthService {
 
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ReglaNegocioException(HttpStatus.UNAUTHORIZED,
-                        "El correo electrónico no se encuentra registrado."));
+                        "Correo o contraseña incorrectos."));
 
         if (usuario.isBloqueado()) {
             throw new ReglaNegocioException(HttpStatus.FORBIDDEN,
@@ -62,7 +62,14 @@ public class AuthService {
 
     // Renovación: con un token todavía válido se entrega uno nuevo (con la expiración reiniciada)
     // junto con los datos actuales del usuario. También sirve para restaurar la sesión al recargar la página.
-    public LoginResponse renovar(Long usuarioId) {
+    // La sesión no se puede extender para siempre: pasado el máximo hay que volver a iniciar sesión.
+    public LoginResponse renovar(Long usuarioId, String token) {
+        long inicioSesion = jwtService.inicioSesion(jwtService.leer(token));
+        if (System.currentTimeMillis() - inicioSesion > jwtService.getMaxSesionMs()) {
+            throw new ReglaNegocioException(HttpStatus.UNAUTHORIZED,
+                    "La sesión alcanzó su duración máxima. Inicia sesión nuevamente.");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new ReglaNegocioException(HttpStatus.UNAUTHORIZED, "La sesión ya no es válida."));
 
@@ -70,6 +77,6 @@ public class AuthService {
             throw new ReglaNegocioException(HttpStatus.FORBIDDEN, "Esta cuenta ha sido BLOQUEADA.");
         }
 
-        return new LoginResponse(jwtService.generarToken(usuario), UsuarioResponse.desde(usuario));
+        return new LoginResponse(jwtService.generarToken(usuario, inicioSesion), UsuarioResponse.desde(usuario));
     }
 }

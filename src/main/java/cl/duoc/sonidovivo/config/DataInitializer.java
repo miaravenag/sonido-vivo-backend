@@ -1,9 +1,13 @@
 package cl.duoc.sonidovivo.config;
 
 import cl.duoc.sonidovivo.model.Categoria;
+import cl.duoc.sonidovivo.model.Compra;
+import cl.duoc.sonidovivo.model.DetalleCompra;
+import cl.duoc.sonidovivo.model.EstadoCompra;
 import cl.duoc.sonidovivo.model.Producto;
 import cl.duoc.sonidovivo.model.Usuario;
 import cl.duoc.sonidovivo.repository.CategoriaRepository;
+import cl.duoc.sonidovivo.repository.CompraRepository;
 import cl.duoc.sonidovivo.repository.ProductoRepository;
 import cl.duoc.sonidovivo.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -12,6 +16,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Configuration
@@ -21,6 +26,7 @@ public class DataInitializer {
     CommandLineRunner cargarDatosDemo(UsuarioRepository usuarioRepository,
                                       CategoriaRepository categoriaRepository,
                                       ProductoRepository productoRepository,
+                                      CompraRepository compraRepository,
                                       PasswordEncoder passwordEncoder) {
         return args -> {
             if (usuarioRepository.count() == 0) {
@@ -74,7 +80,61 @@ public class DataInitializer {
                                 "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500",
                                 "Interfaz de audio USB de 2 entradas / 2 salidas con preamplificadores de ultra bajo ruido.")));
             }
+
+            // Compras de ejemplo repartidas en el último año, para que el dashboard tenga datos en la demostración.
+            // Solo se crean si no existe ninguna compra (no pisa compras reales) y no modifican el stock.
+            if (compraRepository.count() == 0) {
+                Usuario cliente = usuarioRepository.findByEmailIgnoreCase("cliente@duocuc.cl").orElse(null);
+                List<Producto> productos = productoRepository.findAll();
+                if (cliente != null && !productos.isEmpty()) {
+                    cargarComprasDemo(compraRepository, cliente, productos);
+                }
+            }
         };
+    }
+
+    private void cargarComprasDemo(CompraRepository compraRepository, Usuario cliente, List<Producto> productos) {
+        int[] diasAtras = {0, 1, 2, 3, 5, 6, 9, 12, 15, 20, 26, 33, 41, 55, 70, 95, 120, 150, 190, 240, 300};
+        LocalDateTime ahora = LocalDateTime.now();
+
+        for (int i = 0; i < diasAtras.length; i++) {
+            int dias = diasAtras[i];
+            Compra compra = new Compra();
+            compra.setUsuario(cliente);
+            compra.setFecha(ahora.minusDays(dias).minusHours(i % 5));
+
+            // Mezcla de estados: recientes pendientes, intermedias enviadas, antiguas entregadas y alguna cancelada
+            EstadoCompra estado;
+            if (i % 7 == 3) {
+                estado = EstadoCompra.CANCELADA;
+            } else if (dias < 3) {
+                estado = EstadoCompra.PENDIENTE;
+            } else if (dias < 10) {
+                estado = EstadoCompra.ENVIADA;
+            } else {
+                estado = EstadoCompra.ENTREGADA;
+            }
+            compra.setEstado(estado);
+
+            long total = 0;
+            int lineas = 1 + i % 3;
+            for (int j = 0; j < lineas; j++) {
+                Producto producto = productos.get((i * 3 + j * 2) % productos.size());
+                int cantidad = 1 + (i + j) % 2;
+                int precio = producto.getPrecioOferta() != null ? producto.getPrecioOferta() : producto.getPrecio();
+
+                DetalleCompra detalle = new DetalleCompra();
+                detalle.setProductoId(producto.getId());
+                detalle.setNombreProducto(producto.getNombre());
+                detalle.setPrecioUnitario(precio);
+                detalle.setCantidad(cantidad);
+                compra.agregarDetalle(detalle);
+
+                total += (long) precio * cantidad;
+            }
+            compra.setTotal(total);
+            compraRepository.save(compra);
+        }
     }
 
     private Usuario usuario(String nombre, String apellido, LocalDate nacimiento, String email, String passwordEncriptada,
